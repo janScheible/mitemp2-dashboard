@@ -1,0 +1,62 @@
+---
+  - name: "Docker installation, image building and execution of all containers"
+    hosts: localhost
+    connection: local
+
+    vars:
+      openWeatherApiKey: '' # optional
+      openWeatherCity: '' # optional
+      mi2Sensors:
+        'A4:C1:38:12:34:56': Zimmer1
+        'A4:C1:38:AB:CD:EF': Zimmer2
+
+    tasks:
+     - name: "gather facts about all installed packages"
+       package_facts:
+
+     - name: install Docker (if package 'docker-ce' is not present)
+       include_tasks: ./docker-installation-tasks.yml
+       when: "'docker-ce' not in ansible_facts.packages"
+
+     - name: install Git Debian package
+       become: yes
+       apt:
+         pkg:
+           - git
+
+     - name: install Python pip package
+       become: yes
+       apt:
+         pkg:
+           - python3-pip
+
+     - name: install Docker (Compose) Python package for Ansible community.docker/docker_compose collection
+       become: yes
+       pip:
+         name: docker
+         name: docker-compose
+
+     - name: build mitemp2 image with Prometheus Python client
+       become: yes
+       shell: docker image list | grep -q mitemp2 && echo "found-mitemp2-image" || ./build-mitemp2-image.sh
+       register: cmd_result
+       changed_when: cmd_result.stdout != "found-mitemp2-image"
+
+     - name: build openweather-exporter image
+       become: yes
+       shell: docker image list | grep -q openweather-exporter && echo "found-openweather-exporter-image" || ./build-openweather-exporter-image.sh
+       register: cmd_result
+       changed_when: cmd_result.stdout != "found-openweather-exporter-image"
+
+     - name: create _generated-sensors.ini
+       template:
+         src: sensors.j2
+         dest: ./_generated-sensors.ini
+
+     - name: run Docker Compose file
+       become: yes
+       community.docker.docker_compose:
+         project_src: '.'
+       environment:
+         OPEN_WEATHER_API_KEY: '{{ openWeatherApiKey }}'
+         OPEN_WEATHER_CITY: '{{ openWeatherCity }}'

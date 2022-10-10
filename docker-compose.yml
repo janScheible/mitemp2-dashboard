@@ -1,0 +1,83 @@
+services:
+  mitemp2:
+    image: mitemp2
+    privileged: true
+    network_mode: "host" # this is needed to make bluetooth work
+    restart: always
+    command:
+      - '--passive'
+      - '--devicelistfile'
+      - '/app/sensors.ini'
+      - '--watchdogtimer'
+      - '5'
+      - '--onlydevicelist'
+      - '--callback'
+      - 'prometheus/sendToPrometheus.py'
+    volumes:
+      - ./_generated-sensors.ini:/app/sensors.ini
+  prometheus-gateway:
+    image: prom/pushgateway:v1.4.3
+    restart: always
+    ports:
+      - 9091:9091
+    expose:
+      - 9091
+    networks:
+      - mitemp2-network
+  openweather-exporter:
+    image: openweather-exporter
+    restart: always
+    ports:
+      - 2112:2112
+    expose:
+      - 2112
+    environment:
+      - 'OWM_API_KEY=${OPEN_WEATHER_API_KEY}'
+      - 'OWM_LOCATION=${OPEN_WEATHER_CITY}'
+      - 'OWM_POLLING_INTERVAL=900s'
+    networks:
+      - mitemp2-network
+  prometheus:
+    image: prom/prometheus:v2.39.1
+    restart: always
+    ports:
+      - 9090:9090
+    expose:
+      - 9090
+    networks:
+      - mitemp2-network
+    volumes:
+      - mitemp2-prometheus-data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      # default parameters from https://github.com/prometheus/prometheus/blob/main/Dockerfile
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      # set the retention to a really long time
+      - '--storage.tsdb.retention.time=10y'
+    depends_on:
+      - prometheus-gateway
+      - openweather-exporter
+  grafana:
+    image: grafana/grafana-oss:9.1.7
+    restart: always
+    ports:
+      - 3000:3000
+    networks:
+      - mitemp2-network
+    volumes:
+      - mitemp2-grafana-data:/var/lib/grafana
+      - ./grafana-prom-datasource.yml:/etc/grafana/provisioning/datasources/prom-default.yaml
+      - ./grafana-dashboard-provider.yml:/etc/grafana/provisioning/dashboards/mitemp2-dashboards.yaml
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/mitemp2.json
+    environment:
+      - 'GF_AUTH_ANONYMOUS_ENABLED=true'
+    depends_on:
+      - prometheus
+networks:
+  mitemp2-network:
+volumes:
+  mitemp2-prometheus-data:
+  mitemp2-grafana-data:
