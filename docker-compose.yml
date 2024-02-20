@@ -57,6 +57,8 @@ services:
       - '--web.console.templates=/usr/share/prometheus/consoles'
       # set the retention to a really long time
       - '--storage.tsdb.retention.time=10y'
+      # enable admin API for making snapshots via /api/v1/admin/tsdb/snapshot
+      - '--web.enable-admin-api'
     depends_on:
       - prometheus-gateway
       - openweather-exporter

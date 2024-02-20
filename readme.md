@@ -40,3 +40,9 @@ Prometheus retention time is set to 10 years (default would just be 15 days).
 -   Prometheus Pushgateway: http://host-name:9091/ (UI allows to see if temperature metrics are pushed)
 -   Prometheus: http://host-name:9090/ (scraping targets can be checked there)
 -   OpenWeather Exporter: http://host-name:2112/metrics
+
+## Backup
+
+To create a snapshot submit a HTTP POST to http://host-name:9090/api/v1/admin/tsdb/snapshot (see https://prometheus.io/docs/prometheus/latest/querying/api/#snapshot for details).
+Easiest way to get it to the host is to do `tar -czvf snapshot-<snapshot_id>.tar.gz ./<snapshot_id>/` in the container and then use `docker cp <containerId>:/prometheus/snapshots/snapshot-<snapshot_id>.tar.gz ~/` to copy the snapshot to the host.
+To restore the backup simply replace the contents of the `/prometheus` directory with the snapshot (again `docker cp` can be used to get the file into the container).
